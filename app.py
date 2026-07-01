@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, status, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -7,6 +7,8 @@ from typing import List, Dict, Optional
 import os
 
 import db
+import notifications
+
 
 app = FastAPI(title="Calendar Meeting Poll API")
 
@@ -63,7 +65,7 @@ def get_poll_details(poll_id: str):
     return poll
 
 @app.post("/api/polls/{poll_id}/vote")
-def submit_poll_vote(poll_id: str, vote: VoteSubmit):
+def submit_poll_vote(poll_id: str, vote: VoteSubmit, background_tasks: BackgroundTasks):
     poll = db.get_poll(poll_id)
     if not poll:
         raise HTTPException(
@@ -96,6 +98,10 @@ def submit_poll_vote(poll_id: str, vote: VoteSubmit):
             )
             
     updated_poll = db.submit_vote(poll_id, vote.dict())
+    
+    # Schedule email notification to the organizer in the background
+    background_tasks.add_task(notifications.send_vote_notification, updated_poll, vote.dict())
+    
     return updated_poll
 
 @app.post("/api/polls/{poll_id}/finalize")

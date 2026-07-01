@@ -5,27 +5,57 @@ from datetime import datetime
 from typing import Dict, List, Optional
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_FILE = os.path.join(BASE_DIR, "polls_db.json")
+
+# Support Vercel KV / Redis if configured in the environment
+KV_URL = os.environ.get("KV_URL") or os.environ.get("REDIS_URL")
+
+if KV_URL:
+    import redis
+    # Using decode_responses=True ensures we get native string types back from Redis
+    r_client = redis.from_url(KV_URL, decode_responses=True)
+else:
+    r_client = None
+
+# Determine database file location based on environment
+# Vercel's serverless runtime is read-only except for /tmp.
+IS_VERCEL = "VERCEL" in os.environ or os.environ.get("VERCEL") == "1"
+
+if IS_VERCEL and not KV_URL:
+    # Use /tmp as ephemeral fallback so the website works immediately for testing without KV linked
+    DB_FILE = "/tmp/polls_db.json"
+else:
+    DB_FILE = os.path.join(BASE_DIR, "polls_db.json")
 
 def _init_db():
+    if r_client:
+        return
     if not os.path.exists(DB_FILE):
-        with open(DB_FILE, "w") as f:
-            json.dump({}, f)
+        try:
+            with open(DB_FILE, "w") as f:
+                json.dump({}, f)
+        except Exception:
+            pass
 
 def _read_db() -> Dict:
     _init_db()
+    if r_client:
+        return {}
     try:
         with open(DB_FILE, "r") as f:
             return json.load(f)
-    except json.JSONDecodeError:
+    except Exception:
         return {}
 
 def _write_db(data: Dict):
-    with open(DB_FILE, "w") as f:
-        json.dump(data, f, indent=4)
+    if r_client:
+        return
+    try:
+        with open(DB_FILE, "w") as f:
+            json.dump(data, f, indent=4)
+    except Exception:
+        pass
 
 def create_poll(poll_data: dict) -> dict:
-    db = _read_db()
     poll_id = str(uuid.uuid4())
     
     poll = {
@@ -43,20 +73,29 @@ def create_poll(poll_data: dict) -> dict:
         "created_at": datetime.utcnow().isoformat()
     }
     
-    db[poll_id] = poll
-    _write_db(db)
+    if r_client:
+        r_client.set(f"poll:{poll_id}", json.dumps(poll))
+    else:
+        db = _read_db()
+        db[poll_id] = poll
+        _write_db(db)
+        
     return poll
 
 def get_poll(poll_id: str) -> Optional[dict]:
-    db = _read_db()
-    return db.get(poll_id)
+    if r_client:
+        poll_str = r_client.get(f"poll:{poll_id}")
+        if poll_str:
+            return json.loads(poll_str)
+        return None
+    else:
+        db = _read_db()
+        return db.get(poll_id)
 
 def submit_vote(poll_id: str, vote_data: dict) -> Optional[dict]:
-    db = _read_db()
-    if poll_id not in db:
+    poll = get_poll(poll_id)
+    if not poll:
         return None
-    
-    poll = db[poll_id]
     
     # Check if this voter has already voted, if so, update their vote.
     voter_name = vote_data.get("voter_name", "").strip()
@@ -88,16 +127,19 @@ def submit_vote(poll_id: str, vote_data: dict) -> Optional[dict]:
                 poll["finalized_slot_id"] = slot_id
                 break
 
-    db[poll_id] = poll
-    _write_db(db)
+    if r_client:
+        r_client.set(f"poll:{poll_id}", json.dumps(poll))
+    else:
+        db = _read_db()
+        db[poll_id] = poll
+        _write_db(db)
+        
     return poll
 
 def finalize_poll(poll_id: str, slot_id: str) -> Optional[dict]:
-    db = _read_db()
-    if poll_id not in db:
+    poll = get_poll(poll_id)
+    if not poll:
         return None
-        
-    poll = db[poll_id]
     
     # Check if the slot_id is valid
     valid_slots = [s["id"] for s in poll["slots"]]
@@ -105,6 +147,12 @@ def finalize_poll(poll_id: str, slot_id: str) -> Optional[dict]:
         return None
         
     poll["finalized_slot_id"] = slot_id
-    db[poll_id] = poll
-    _write_db(db)
+    
+    if r_client:
+        r_client.set(f"poll:{poll_id}", json.dumps(poll))
+    else:
+        db = _read_db()
+        db[poll_id] = poll
+        _write_db(db)
+        
     return poll
