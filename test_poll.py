@@ -15,7 +15,23 @@ def test_full_poll_flow():
     if os.path.exists(db.DB_FILE):
         os.remove(db.DB_FILE)
         
-    print("1. Creating a poll...")
+    print("0. Registering and logging in test organizer...")
+    reg_res = client.post("/api/auth/register", json={
+        "email": "alice@example.com",
+        "password": "securepassword123",
+        "name": "Alice Smith"
+    })
+    assert reg_res.status_code == 200, f"Register failed: {reg_res.text}"
+    
+    login_res = client.post("/api/auth/login", json={
+        "email": "alice@example.com",
+        "password": "securepassword123"
+    })
+    assert login_res.status_code == 200, f"Login failed: {login_res.text}"
+    token = login_res.json()["session_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    print("\n1. Creating a poll (with auth)...")
     poll_payload = {
         "title": "Weekly Planning Meeting",
         "description": "Align on current objectives and tasks",
@@ -29,7 +45,7 @@ def test_full_poll_flow():
         ]
     }
     
-    response = client.post("/api/polls", json=poll_payload)
+    response = client.post("/api/polls", json=poll_payload, headers=headers)
     assert response.status_code == 201, f"Failed creation: {response.text}"
     created_poll = response.json()
     assert created_poll["title"] == "Weekly Planning Meeting"
@@ -77,11 +93,11 @@ def test_full_poll_flow():
     assert len(voted_poll_2["votes"]) == 2
     print("   Success!")
     
-    print("\n5. Finalizing a slot...")
+    print("\n5. Finalizing a slot (with auth verification)...")
     finalize_payload = {
         "slot_id": "slot-2"
     }
-    response = client.post(f"/api/polls/{poll_id}/finalize", json=finalize_payload)
+    response = client.post(f"/api/polls/{poll_id}/finalize", json=finalize_payload, headers=headers)
     assert response.status_code == 200
     finalized_poll = response.json()
     assert finalized_poll["finalized_slot_id"] == "slot-2"
@@ -91,7 +107,23 @@ def test_full_poll_flow():
 
 def test_one_on_one_flow():
     print("\n--- Starting One-on-One Scheduler Flow Test ---")
-    print("1. Creating a 1-on-1 poll...")
+    print("0. Registering and logging in 1-on-1 organizer...")
+    reg_res = client.post("/api/auth/register", json={
+        "email": "smith@example.com",
+        "password": "securepassword123",
+        "name": "Dr. Smith"
+    })
+    # May already exist in the test db, so we don't assert 200 on register.
+    
+    login_res = client.post("/api/auth/login", json={
+        "email": "smith@example.com",
+        "password": "securepassword123"
+    })
+    assert login_res.status_code == 200, f"Login failed: {login_res.text}"
+    token = login_res.json()["session_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    print("\n1. Creating a 1-on-1 poll...")
     poll_payload = {
         "poll_type": "one_on_one",
         "title": "Quick Consultation",
@@ -105,7 +137,7 @@ def test_one_on_one_flow():
             {"id": "slot-b", "start_time": "2026-07-06T11:00:00Z", "end_time": "2026-07-06T11:15:00Z"}
         ]
     }
-    response = client.post("/api/polls", json=poll_payload)
+    response = client.post("/api/polls", json=poll_payload, headers=headers)
     assert response.status_code == 201
     poll = response.json()
     assert poll["poll_type"] == "one_on_one"

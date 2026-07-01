@@ -1,6 +1,32 @@
 {
-    "8e19d25f-862e-4398-b008-55766b751df9": {
-        "id": "8e19d25f-862e-4398-b008-55766b751df9",
+    "__users__": {
+        "alice@example.com": {
+            "email": "alice@example.com",
+            "password_hash": "80984469ab201f6cfc3c2a5d5def1ab1e0f649dcc977c1c89e3d0ef74cdbac5b",
+            "salt": "c9d7c6e4a6dca4376d4481eb7eb2fa27",
+            "name": "Alice Smith",
+            "created_at": "2026-07-01T21:07:13.147852",
+            "polls": [
+                "964d27d9-f6f5-41d4-93c1-94860fd7a9f8"
+            ]
+        },
+        "smith@example.com": {
+            "email": "smith@example.com",
+            "password_hash": "ba11703602841a6d6c6a76dd5ae372ca0c11879d632edc9d88ce6005766d771c",
+            "salt": "9a4f15f069449c512865e66e905ec03f",
+            "name": "Dr. Smith",
+            "created_at": "2026-07-01T21:07:13.288976",
+            "polls": [
+                "8cfca92b-9a45-4010-96fb-fa7a9f26d818"
+            ]
+        }
+    },
+    "__sessions__": {
+        "0434054e-c7a3-4795-9ca9-f7105e48de93": "alice@example.com",
+        "a2f841e2-aea1-41a1-bc97-d2c69e7f6ac9": "smith@example.com"
+    },
+    "964d27d9-f6f5-41d4-93c1-94860fd7a9f8": {
+        "id": "964d27d9-f6f5-41d4-93c1-94860fd7a9f8",
         "poll_type": "group",
         "title": "Weekly Planning Meeting",
         "description": "Align on current objectives and tasks",
@@ -28,7 +54,7 @@
                     "slot-1": "yes",
                     "slot-2": "if_need_be"
                 },
-                "updated_at": "2026-07-01T18:01:02.953838"
+                "updated_at": "2026-07-01T21:07:13.227712"
             },
             {
                 "voter_name": "Charlie Brown",
@@ -37,14 +63,15 @@
                     "slot-1": "no",
                     "slot-2": "yes"
                 },
-                "updated_at": "2026-07-01T18:01:02.969482"
+                "updated_at": "2026-07-01T21:07:13.239242"
             }
         ],
+        "invite_emails": [],
         "finalized_slot_id": "slot-2",
-        "created_at": "2026-07-01T18:01:02.924502"
+        "created_at": "2026-07-01T21:07:13.203547"
     },
-    "c6cb9b86-bd65-4840-81d3-f53d98375a2b": {
-        "id": "c6cb9b86-bd65-4840-81d3-f53d98375a2b",
+    "8cfca92b-9a45-4010-96fb-fa7a9f26d818": {
+        "id": "8cfca92b-9a45-4010-96fb-fa7a9f26d818",
         "poll_type": "one_on_one",
         "title": "Quick Consultation",
         "description": "Book a 1-on-1 slot",
@@ -72,10 +99,11 @@
                     "slot-a": "no",
                     "slot-b": "yes"
                 },
-                "updated_at": "2026-07-01T18:01:03.032573"
+                "updated_at": "2026-07-01T21:07:13.357748"
             }
         ],
+        "invite_emails": [],
         "finalized_slot_id": "slot-b",
-        "created_at": "2026-07-01T18:01:03.005320"
+        "created_at": "2026-07-01T21:07:13.337953"
     }
 }

@@ -108,3 +108,72 @@ def send_vote_notification(poll: dict, vote: dict):
             print(f"Resend notification successfully sent to {organizer_email}. Code {res.getcode()}")
     except Exception as e:
         print(f"Failed to send email notification to organizer: {e}")
+
+def send_invite_emails(poll_id: str, poll_title: str, organizer_name: str, emails: list):
+    api_key = os.environ.get("RESEND_API_KEY")
+    if not api_key or not emails:
+        print("RESEND_API_KEY not configured or emails list empty. Skipping invitation emails.")
+        return
+
+    url = "https://api.resend.com/emails"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+
+    # Resolve production URL for invite link
+    production_url = os.environ.get("VERCEL_PROJECT_PRODUCTION_URL") or os.environ.get("VERCEL_URL")
+    if not production_url:
+        production_url = "meetingpoll.vercel.app"
+    
+    if not production_url.startswith("http"):
+        production_url = f"https://{production_url}"
+        
+    vote_link = f"{production_url}/poll/{poll_id}"
+
+    for email in emails:
+        email = email.strip()
+        if not email:
+            continue
+            
+        html_content = f"""
+        <div style="font-family: Arial, sans-serif; color: #1f2937; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 8px; padding: 24px; background-color: #ffffff;">
+            <h2 style="color: #4f46e5; margin-top: 0; font-size: 20px; font-weight: bold;">Invitation: Vote on Meeting Availability 📅</h2>
+            <p>Hi,</p>
+            <p><strong>{organizer_name}</strong> has invited you to submit your availability for the meeting: <strong style="color: #4f46e5;">{poll_title}</strong>.</p>
+            
+            <p>Please click the button below to view the proposed slots and select your availability:</p>
+            
+            <p style="margin-top: 24px; text-align: center;">
+                <a href="{vote_link}" style="display: inline-block; background-color: #4f46e5; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 15px;">
+                    Select Availability
+                </a>
+            </p>
+            
+            <hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
+            <p style="font-size: 12px; color: #6b7280; text-align: center; margin-bottom: 0;">
+                Sent by MeetingPOLL. Designed for scheduling.
+            </p>
+        </div>
+        """
+
+        payload = {
+            "from": "MeetingPOLL <onboarding@resend.dev>",
+            "to": email,
+            "subject": f"Invitation to vote: '{poll_title}' by {organizer_name}",
+            "html": html_content
+        }
+
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers=headers,
+            method="POST"
+        )
+
+        try:
+            with urllib.request.urlopen(req) as res:
+                print(f"Invitation email successfully sent to {email}. Code {res.getcode()}")
+        except Exception as e:
+            print(f"Failed to send invitation email to {email}: {e}")
+

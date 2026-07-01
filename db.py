@@ -1,6 +1,8 @@
 import json
 import os
 import uuid
+import hashlib
+import secrets
 from datetime import datetime
 from typing import Dict, List, Optional
 
@@ -69,6 +71,7 @@ def create_poll(poll_data: dict) -> dict:
         "organizer_email": poll_data.get("organizer_email", ""),
         "slots": poll_data.get("slots", []), # List of dicts: {"id": str, "start_time": str(ISO), "end_time": str(ISO)}
         "votes": [], # List of dicts: {"voter_name": str, "voter_email": str, "choices": dict}
+        "invite_emails": poll_data.get("invite_emails", []), # List of strings
         "finalized_slot_id": None,
         "created_at": datetime.utcnow().isoformat()
     }
@@ -156,3 +159,124 @@ def finalize_poll(poll_id: str, slot_id: str) -> Optional[dict]:
         _write_db(db)
         
     return poll
+
+def hash_password(password: str, salt: bytes = None) -> tuple:
+    if salt is None:
+        salt = secrets.token_bytes(16)
+    pwd_hash = hashlib.pbkdf2_hmac('sha256', password.encode(), salt, 100000)
+    return pwd_hash.hex(), salt.hex()
+
+def create_user(email: str, password_plain: str, name: str) -> Optional[dict]:
+    email = email.lower().strip()
+    if get_user(email):
+        return None
+        
+    pwd_hash, salt = hash_password(password_plain)
+    user = {
+        "email": email,
+        "password_hash": pwd_hash,
+        "salt": salt,
+        "name": name.strip(),
+        "created_at": datetime.utcnow().isoformat()
+    }
+    
+    if r_client:
+        r_client.set(f"user:{email}", json.dumps(user))
+    else:
+        db = _read_db()
+        if "__users__" not in db:
+            db["__users__"] = {}
+        db["__users__"][email] = user
+        db["__users__"][email]["polls"] = []
+        _write_db(db)
+        
+    return user
+
+def get_user(email: str) -> Optional[dict]:
+    email = email.lower().strip()
+    if r_client:
+        user_str = r_client.get(f"user:{email}")
+        if user_str:
+            return json.loads(user_str)
+        return None
+    else:
+        db = _read_db()
+        return db.get("__users__", {}).get(email)
+
+def authenticate_user(email: str, password_plain: str) -> Optional[str]:
+    email = email.lower().strip()
+    user = get_user(email)
+    if not user:
+        return None
+        
+    pwd_hash, _ = hash_password(password_plain, bytes.fromhex(user["salt"]))
+    if pwd_hash != user["password_hash"]:
+        return None
+        
+    token = str(uuid.uuid4())
+    
+    if r_client:
+        r_client.setex(f"session:{token}", 604800, email)
+    else:
+        db = _read_db()
+        if "__sessions__" not in db:
+            db["__sessions__"] = {}
+        db["__sessions__"][token] = email
+        _write_db(db)
+        
+    return token
+
+def get_user_by_session(token: str) -> Optional[dict]:
+    if not token:
+        return None
+        
+    if r_client:
+        email = r_client.get(f"session:{token}")
+        if email:
+            return get_user(email)
+        return None
+    else:
+        db = _read_db()
+        email = db.get("__sessions__", {}).get(token)
+        if email:
+            return get_user(email)
+        return None
+
+def delete_session(token: str):
+    if r_client:
+        r_client.delete(f"session:{token}")
+    else:
+        db = _read_db()
+        if "__sessions__" in db and token in db["__sessions__"]:
+            del db["__sessions__"][token]
+            _write_db(db)
+
+def link_poll_to_user(email: str, poll_id: str):
+    email = email.lower().strip()
+    if r_client:
+        r_client.sadd(f"user:{email}:polls", poll_id)
+    else:
+        db = _read_db()
+        if "__users__" in db and email in db["__users__"]:
+            if "polls" not in db["__users__"][email]:
+                db["__users__"][email]["polls"] = []
+            if poll_id not in db["__users__"][email]["polls"]:
+                db["__users__"][email]["polls"].append(poll_id)
+            _write_db(db)
+
+def get_user_polls(email: str) -> List[dict]:
+    email = email.lower().strip()
+    poll_ids = []
+    if r_client:
+        poll_ids = list(r_client.smembers(f"user:{email}:polls"))
+    else:
+        db = _read_db()
+        if "__users__" in db and email in db["__users__"]:
+            poll_ids = db["__users__"][email].get("polls", [])
+            
+    polls = []
+    for pid in poll_ids:
+        poll = get_poll(pid)
+        if poll:
+            polls.append(poll)
+    return polls

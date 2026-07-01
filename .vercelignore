@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+polls_db.json
+.venv/
+env/
+.git/
+test_poll.py
+run_desktop.py
+Meeting_poll.zip
+README.md
+implementation_plan.md
+task.md
+walkthrough.md
